@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
-from utils import claude, structured_claude
+from utils import simple_claude, structured_claude
 import json
 
 # Building Effective AI Agents: demonstrating the prompt-chaining workflow with a chain that:
@@ -66,7 +66,7 @@ If possible, please include information about this technology's architecture in 
 def prompt_chaining(initial_message: str):
     print(f"Initial message: {initial_message}")
 
-    open_source_response = claude(open_source_prompt, initial_message)
+    open_source_response = simple_claude(open_source_prompt, initial_message)
 
     print(f"Response from the first LLM call in the chain: {open_source_response}")
 
@@ -76,10 +76,10 @@ def prompt_chaining(initial_message: str):
     
     github_repo = gate_input.get("github_url", None)
     
-    helpful_urls = claude(documentation_prompt, github_repo)
+    helpful_urls = simple_claude(documentation_prompt, github_repo)
     print(f"Response from the second LLM call in the chain: {helpful_urls}")
 
-    summarizer_response = claude(summarizer_prompt, f"GitHub repo: {github_repo}\nHelpful urls: {helpful_urls}")
+    summarizer_response = simple_claude(summarizer_prompt, f"GitHub repo: {github_repo}\nHelpful urls: {helpful_urls}")
     print(f"Response from the third LLM call in the chain: {summarizer_response}")
     return summarizer_response
 

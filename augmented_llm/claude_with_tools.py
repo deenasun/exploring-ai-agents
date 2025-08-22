@@ -151,7 +151,7 @@ def chat_with_claude(user_message: str):
         # tool_use = next(block for block in message.content if block.type == "tool_use")
         # tool_name = tool_use.name
         # tool_input = tool_use.input
-
+        
         for block in message.content:
             if block.type != "tool_use":
                 continue
