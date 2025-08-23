@@ -1,9 +1,13 @@
+import sys
+import os
 from utils import structured_claude
 from pydantic import BaseModel, Field
 from typing import Literal
 from dotenv import load_dotenv
-import os
 import requests
+
+# Add the project root to Python path so we can import utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
 HARDCOVER_AUTHORIZATION = os.getenv("HARDCOVER_AUTHORIZATION")

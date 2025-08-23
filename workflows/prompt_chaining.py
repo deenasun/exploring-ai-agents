@@ -1,5 +1,11 @@
+import sys
+import os
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
+
+# Add the project root to Python path so we can import utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils import simple_claude, structured_claude
 import json
 

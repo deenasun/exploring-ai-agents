@@ -1,4 +1,10 @@
+import sys
+import os
 from datetime import datetime
+
+# Add the project root to Python path so we can import utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils import claude, search_flights, brave_search, search_weather, get_url, tools
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -95,8 +101,8 @@ If the user doesn't specify a starting location, you can assume they are based i
 If the user doesn't specify a date, use today's date. Or find the best flights over the next few days.
 You can also try searching for narby airports.
 
-Return a information for the best flight option you can find based on your research.
-å
+Return information for the best flight option you can find based on your research.
+
 For your information, today's date is {current_date}
 """
 
@@ -125,7 +131,7 @@ For your information, today's date is {current_date}
                         "type": "string",
                         "description": "Optional parameter. A date in the format YYYY-MM-DD (e.g. 2025-08-21). Required if the flight type is round trip",
                     },
-                    "type": {
+                    "flight_type": {
                         "type": "integer",
                         "description": "Optional parameter to define the type of flight to search for. 1 = round trip, 2 = one way, 3 = multi-city",
                     },
@@ -393,7 +399,6 @@ For your information, today's date is {current_date}
 
 
 async def parallelization(user_input: str) -> None:
-    user_input = "I want to visit Austin!"
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor(max_workers=3) as executor:
         # Need to wrap the synchronous functions in a coroutine
@@ -436,3 +441,8 @@ Therefore, you should include as much information about the intinerary as you ca
 
     print("Final Response:")
     print(f"Summary: {response.content[0].text}")
+
+if __name__ == "__main__":
+    print("Hello world!")
+    user_input = input("What would you like to do? ")
+    asyncio.run(parallelization(user_input=user_input))

@@ -1,3 +1,19 @@
+"""Utility functions and classes for AI agent workflows.
+
+This module provides functions for interacting with Claude AI models, web search APIs,
+flight search, weather data, and URL content retrieval. It also includes Pydantic
+models for structured data handling and tool definitions for AI agent interactions.
+
+Main components:
+- Claude AI interaction functions (claude, simple_claude, structured_claude)
+- Web search via Brave Search API (brave_search)
+- Flight search via SerpAPI (search_flights)
+- Weather data via Open-Meteo API (search_weather)
+- URL content retrieval (get_url)
+- Pydantic models for data validation
+- Tool definitions for AI agent workflows
+"""
+
 import re
 from typing import Literal, Annotated
 import anthropic
@@ -22,9 +38,20 @@ def claude(
     model=MODEL_NAME,
     tools=[],
 ) -> str:
-    """
-    Calls Claude with the given user prompt, system prompt, and tools (if provided)
-    Returns list of TextBlock or a ToolUseBlock
+    """Calls Claude with the given user prompt, system prompt, and tools (if provided).
+    
+    Args:
+        user_prompt: The user's input prompt. Defaults to empty string.
+        messages: List of conversation messages. Defaults to empty list.
+        system_prompt: System prompt to guide Claude's behavior. Defaults to empty string.
+        model: Claude model to use. Defaults to MODEL_NAME environment variable.
+        tools: List of tools available to Claude. Defaults to empty list.
+    
+    Returns:
+        Message: Claude's response containing TextBlock or ToolUseBlock.
+    
+    Raises:
+        ValueError: If neither user_prompt nor messages are provided.
     """
     if not user_prompt and not messages:
         raise ValueError("Must provide at least one of user_prompt or messages")
@@ -50,9 +77,20 @@ def simple_claude(
     model=MODEL_NAME,
     tools=[],
 ) -> str:
-    """
-    Calls Claude with the given user prompt, system prompt, and tools (if provided)
-    Returns a SINGLE TextBlock or ToolUseBlock
+    """Calls Claude with the given user prompt, system prompt, and tools (if provided).
+    
+    Args:
+        user_prompt: The user's input prompt. Defaults to empty string.
+        messages: List of conversation messages. Defaults to empty list.
+        system_prompt: System prompt to guide Claude's behavior. Defaults to empty string.
+        model: Claude model to use. Defaults to MODEL_NAME environment variable.
+        tools: List of tools available to Claude. Defaults to empty list.
+    
+    Returns:
+        str: A single TextBlock or ToolUseBlock content.
+    
+    Raises:
+        ValueError: If neither user_prompt nor messages are provided.
     """
     if not user_prompt and not messages:
         raise ValueError("Must provide at least one of user_prompt or messages")
@@ -73,8 +111,12 @@ def simple_claude(
     return response.content[0]
 
 
-# define default schema for response
 class Response(BaseModel):
+    """Default response schema for Claude structured output.
+    
+    Attributes:
+        text: The text content of the response.
+    """
     text: str
 
 
@@ -89,10 +131,26 @@ def structured_claude(
     tools=[],
     parallel_tools=False,
 ) -> str:
-    """
-    Util to call Claude with structured output!
-    Wraps Claude with the instructor library.
-    Claude is capable of making multiple tools calls, but make sure the response_model is an Iterable
+    """Calls Claude with structured output using the instructor library.
+    
+    Wraps Claude with the instructor library to enable structured responses.
+    Claude is capable of making multiple tool calls, but ensure the response_model
+    is an Iterable if you expect multiple results.
+    
+    Args:
+        user_prompt: The user's input prompt. Defaults to empty string.
+        messages: List of conversation messages. Defaults to empty list.
+        response_model: Pydantic model for structured output. Defaults to Response.
+        system_prompt: System prompt to guide Claude's behavior. Defaults to empty string.
+        model: Claude model to use. Defaults to MODEL_NAME environment variable.
+        tools: List of tools available to Claude. Defaults to empty list.
+        parallel_tools: Whether to use parallel tool execution. Defaults to False.
+    
+    Returns:
+        Message: Claude's structured response matching the response_model.
+    
+    Raises:
+        ValueError: If neither user_prompt nor messages are provided.
     """
     if not user_prompt and not messages:
         raise ValueError("Must provide at least one of user_prompt or messages")
@@ -122,16 +180,16 @@ def structured_claude(
 
 
 def extract_xml(text: str, tag: str) -> str:
-    """
-    Extracts content between the opening and closing XML tags.
-    Useful for parsing structured responses in XML format
-
+    """Extracts content between the opening and closing XML tags.
+    
+    Useful for parsing structured responses in XML format.
+    
     Args:
-        text (str): the text containing XML tags
-        tag (str): XML tags to extract content from
-
+        text: The text containing XML tags.
+        tag: XML tag name to extract content from.
+    
     Returns:
-        str: content inside the XML tags
+        str: Content inside the XML tags, or None if not found.
     """
     # by default, dot in regex matches any character except a newline
     # when re.DOTALL is enabled, the dot is modified to match all characters including new lines
@@ -139,6 +197,26 @@ def extract_xml(text: str, tag: str) -> str:
 
 
 class WebResult(BaseModel):
+    """Schema for web search results from Brave Search API.
+    
+    Attributes:
+        title: Title of the webpage.
+        url: URL of the webpage.
+        is_source_local: Whether the source is local.
+        is_source_both: Whether the source is both local and non-local.
+        description: Description or snippet of the webpage content.
+        page_age: Age of the page content. Optional.
+        profile: Profile information. Optional.
+        language: Language of the webpage.
+        family_friendly: Whether the content is family-friendly.
+        type: Type identifier, always "search_result".
+        subtype: Subtype of the search result.
+        is_live: Whether the content is live/real-time.
+        deep_results: Additional deep search results. Optional.
+        meta_url: Metadata about the URL.
+        thumbnail: Thumbnail image information. Optional.
+        age: Age classification. Optional.
+    """
     title: str
     url: str
     is_source_local: bool
@@ -158,6 +236,17 @@ class WebResult(BaseModel):
 
 
 class VideoResult(BaseModel):
+    """Schema for video search results from Brave Search API.
+    
+    Attributes:
+        title: Title of the video.
+        url: URL of the video.
+        description: Description of the video content.
+        fetched_content_timestamp: Timestamp when content was fetched. Optional.
+        video: Video-specific metadata and information.
+        type: Type identifier, always "video_result".
+        meta_url: Metadata about the URL.
+    """
     title: str
     url: str
     description: str
@@ -168,15 +257,38 @@ class VideoResult(BaseModel):
 
 
 class BraveSearchResult(BaseModel):
+    """Union type for Brave Search results, discriminated by result type.
+    
+    Attributes:
+        result: Either a WebResult or VideoResult, discriminated by the 'type' field.
+    """
     result: Annotated[WebResult | VideoResult, Field(discriminator="type")]
 
 
 class Error(BaseModel):
+    """Schema for error responses from API calls.
+    
+    Attributes:
+        status_code: HTTP status code of the error.
+        content: Error message or content details.
+    """
     status_code: int
     content: str
 
 
 def parse_brave_results(results: list[dict]) -> list[BraveSearchResult]:
+    """Parses raw Brave Search API results into structured Pydantic models.
+    
+    Args:
+        results: List of raw result dictionaries from Brave Search API.
+    
+    Returns:
+        list[BraveSearchResult]: List of parsed WebResult and VideoResult objects.
+    
+    Note:
+        Currently handles 'search_result' and 'video_result' types.
+        Other result types are skipped for future implementation.
+    """
     parsed_results = []
     for result in results:
         if result["type"] == "search_result":
@@ -195,13 +307,21 @@ def parse_brave_results(results: list[dict]) -> list[BraveSearchResult]:
 def brave_search(
     query: str, count: int = 10, result_filter: str = ""
 ) -> list[BraveSearchResult] | dict:
-    """
-    params:
-        - query (required)
-        - count (optional)
-        - result_filter (optional): comma delimited string of result types to include in the search response.
-            - leave blank to return all result types in the search response with available data
-            - available result filter values: discussions, faq, infobox, news, query, summarizer, videos, web, locations
+    """Searches the web using Brave Search API.
+    
+    Args:
+        query: The search query string. Required.
+        count: Number of results to return. Maximum is 20. Defaults to 10.
+        result_filter: Comma-delimited string of result types to include.
+            Leave blank to return all result types. Available values:
+            discussions, faq, infobox, news, query, summarizer, videos, web, locations.
+            Defaults to empty string.
+    
+    Returns:
+        list[BraveSearchResult] | dict: List of search results or error dict.
+    
+    Note:
+        Requires BRAVE_API_KEY environment variable to be set.
     """
     BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 
@@ -237,26 +357,27 @@ def search_flights(
     arrival_id: str,
     outbound_date: str,
     return_date: str = "",
-    type: int = 1,
+    flight_type: int = 1,
     sort_by: int = 1,
 ):
-    """
-    Params:
-        - departure_id: airport code or location kgmid (e.g. CDG for Paris Charles de Gaulle). Can also be a comma-delimited string of multiple ids
-        - arrival_id: airport code or location kgmid
-        - outbound_date: date in the format YYYY-MM-DD
-        - return_date: Optional parameter to define the return date in the format YYYY-MM-DD. Required if the flight type = round trip
-        - type: Optional parameter to define the type of the flight.
-            - 1 = round trip
-            - 2 = one way
-            - 3 = multi-city
-        - sort_by: Optional parameter to define the sorting order of the results.
-            - 1 = Top flights (default)
-            - 2 = Price
-            - 3 = Departure time
-            - 4 = Arrival time
-            - 5 = Duration
-            - 6 = Emissions
+    """Searches for flight information using Google Flights via SerpAPI.
+    
+    Args:
+        departure_id: Airport code or location kgmid (e.g., CDG for Paris Charles de Gaulle).
+            Can also be a comma-delimited string of multiple IDs.
+        arrival_id: Airport code or location kgmid of the arrival location.
+        outbound_date: Departure date in YYYY-MM-DD format.
+        return_date: Return date in YYYY-MM-DD format. Required if flight type is round trip.
+            Defaults to empty string.
+        flight_type: Flight type. 1 = round trip, 2 = one way, 3 = multi-city. Defaults to 1.
+        sort_by: Sorting order for results. 1 = Top flights, 2 = Price, 3 = Departure time,
+            4 = Arrival time, 5 = Duration, 6 = Emissions. Defaults to 1.
+    
+    Returns:
+        list | dict: List of flight results or error dict.
+    
+    Note:
+        Requires SERPAPI_KEY environment variable to be set.
     """
     SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
@@ -265,7 +386,7 @@ def search_flights(
         "departure_id": departure_id,
         "arrival_id": arrival_id,
         "outbound_date": outbound_date,
-        "type": type,
+        "type": flight_type,
         "sort_by": sort_by,
         "hl": "en",
         "gl": "us",
@@ -296,12 +417,21 @@ def search_flights(
 def search_weather(
     latitude: float, longitude: float, forecast_days: int = 7, past_days: int = 0
 ):
-    """
-    Params:
-        - latitude: required parameter
-        - longitude: required parameter
-        - forecast_days: optional parameter. How many days in the future the retrieved forecast should include. Maximum is 16.
-        - past_days: optional parameter. How many days in the past to retrieve weather information for.
+    """Retrieves weather information for a specific location using Open-Meteo API.
+    
+    Args:
+        latitude: Latitude coordinate of the location. Required.
+        longitude: Longitude coordinate of the location. Required.
+        forecast_days: Number of days in the future for forecast. Maximum is 16. Defaults to 7.
+        past_days: Number of days in the past for historical weather. Defaults to 0.
+    
+    Returns:
+        dict: Weather data including temperature, precipitation, sunrise/sunset times,
+            or error dict if request fails.
+    
+    Note:
+        Currently hardcoded to San Francisco coordinates (37.8716, -122.2728).
+        Returns daily weather data in Fahrenheit, miles per hour, and inches.
     """
     open_meteo_url = "https://api.open-meteo.com/v1/forecast"
 
@@ -347,9 +477,17 @@ def search_weather(
 
 
 def get_url(url: str):
-    """
-    Params:
-        - url: required parameter. The full url to fetch data from.
+    """Fetches content from a URL and returns the response data.
+    
+    Args:
+        url: The full URL to fetch data from. Required.
+    
+    Returns:
+        dict | str: JSON data if content-type is application/json, otherwise text content,
+            or error dict if request fails.
+    
+    Note:
+        Currently hardcoded to fetch from "https://example.com" regardless of input.
     """
 
     url = "https://example.com"
@@ -372,6 +510,7 @@ def get_url(url: str):
         return error
 
 
+# List of tools available for Claude to use
 tools = [
     {
         "name": "brave_search",
