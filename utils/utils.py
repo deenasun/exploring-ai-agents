@@ -485,12 +485,7 @@ def get_url(url: str):
     Returns:
         dict | str: JSON data if content-type is application/json, otherwise text content,
             or error dict if request fails.
-    
-    Note:
-        Currently hardcoded to fetch from "https://example.com" regardless of input.
     """
-
-    url = "https://example.com"
     response = requests.get(url)
 
     if response.status_code == 200:
