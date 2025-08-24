@@ -11,11 +11,13 @@ from .utils import (
     search_weather,
     get_url,
     tools,
+    process_tool_call,
+    get_pdf_text,
     Response,
     WebResult,
     VideoResult,
     BraveSearchResult,
-    Error
+    Error,
 )
 
 __all__ = [
@@ -28,6 +30,8 @@ __all__ = [
     "search_weather",
     "get_url",
     "tools",
+    "process_tool_call",
+    "get_pdf_text",
     "Response",
     "WebResult",
     "VideoResult", 
