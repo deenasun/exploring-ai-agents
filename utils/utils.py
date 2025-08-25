@@ -1,8 +1,9 @@
 """Utility functions and classes for AI agent workflows.
 
 This module provides functions for interacting with Claude AI models, web search APIs,
-flight search, weather data, and URL content retrieval. It also includes Pydantic
-models for structured data handling and tool definitions for AI agent interactions.
+flight search, weather data, URL content retrieval, book search, movie search, and
+artwork search. It also includes Pydantic models for structured data handling and
+tool definitions for AI agent interactions.
 
 Main components:
 - Claude AI interaction functions (claude, simple_claude, structured_claude)
@@ -10,6 +11,10 @@ Main components:
 - Flight search via SerpAPI (search_flights)
 - Weather data via Open-Meteo API (search_weather)
 - URL content retrieval (get_url)
+- PDF text extraction (get_pdf_text)
+- Book search via Hardcover.app API (search_books)
+- Movie search via TMDB API (search_movies_by_director)
+- Artwork search via Art Institute of Chicago API (search_artworks_by_artist)
 - Pydantic models for data validation
 - Tool definitions for AI agent workflows
 """
@@ -39,7 +44,7 @@ def claude(
     messages: list[any] = [],
     model=MODEL_NAME,
     tools=[],
-    max_tokens=1000
+    max_tokens=1000,
 ) -> str:
     """Calls Claude with the given user prompt, system prompt, and tools (if provided).
 
@@ -514,6 +519,230 @@ def get_url(url: str):
         return error
 
 
+def process_tool_call(tool_name: str, params: dict):
+    print("=" * 50)
+    print(f"Tool call using tool {tool_name}")
+    print(f"Tool call params {params}")
+
+    if tool_name == "brave_search":
+        res = brave_search(**params)
+    elif tool_name == "search_flights":
+        res = search_flights(**params)
+    elif tool_name == "search_weather":
+        res = search_weather(**params)
+    elif tool_name == "get_url":
+        res = get_url(**params)
+    elif tool_name == "search_books":
+        res = search_books(**params)
+    elif tool_name == "search_movies_by_director":
+        res = search_movies_by_director(**params)
+    elif tool_name == "search_artworks_by_artist":
+        res = search_artworks_by_artist(**params)
+    else:
+        res = f"The {tool_name} tool isn't currently defined"
+    print(f"Tool call result: {res}")
+    print("=" * 50)
+    return res
+
+
+def get_pdf_text(pdf_url: str) -> str | Error:
+    response = requests.get(pdf_url)
+    if response.status_code == 200:
+        tempdir = tempfile.TemporaryDirectory()
+        print(f"Temporary directory created at: {tempdir.name}")
+
+        try:
+            temp_pdf_path = os.path.join(tempdir.name, "temp.pdf")
+            with open(temp_pdf_path, "wb") as f:
+                f.write(response.content)
+            print(f"PDF downloaded successfully to {temp_pdf_path}")
+            document = fitz.open(temp_pdf_path)
+            pdf_text = []
+            for page_index, page in enumerate(document):
+                text = page.get_text("text")
+                pdf_text.append(text)
+            res = "\n".join(pdf_text)
+            return res
+        except Exception as e:
+            print(f"Error extracting text from pdf: {e}")
+
+        tempdir.cleanup()
+        print("Temporary directory cleaned up")
+
+    else:
+        print(
+            f"Status code {response.status_code} when getting pdf text. Error message: {response.json()}"
+        )
+        return Error(
+            status_code=response.status_code, content=json.dumps(response.json())
+        )
+
+
+def search_books(author: str):
+    """Searches Hardcover.app for the top 20 books written by an author.
+
+    Uses the Hardcover GraphQL API to find books by a specific author, ordered by popularity
+    (number of users who have read the book).
+
+    Args:
+        author: The name of the author to search for.
+
+    Returns:
+        dict: A dictionary containing either:
+            - {"books": list}: List of book dictionaries with id, title, users_count, and description
+            - {"error": list}: List of error messages if the API call fails
+
+    Note:
+        Requires HARDCOVER_AUTHORIZATION environment variable to be set.
+        Returns up to 20 books ordered by popularity (users_count).
+    """
+    HARDCOVER_AUTHORIZATION = os.getenv("HARDCOVER_AUTHORIZATION")
+    if not HARDCOVER_AUTHORIZATION:
+        return {"error": "HARDCOVER_AUTHORIZATION environment variable not set"}
+
+    # See Hardcover API: https://docs.hardcover.app/api/getting-started/
+    url = "https://api.hardcover.app/v1/graphql"
+
+    query = f"""
+    query MyQuery {{
+    authors(where: {{name: {{_eq: "{author}"}}}}) {{
+        name
+        contributions(
+        order_by: {{book: {{users_count: desc_nulls_last}}}}, limit: 20
+        ) {{
+        book {{
+            id
+            title
+            users_count
+            description
+        }}
+        }}
+    }}
+    }}
+    """
+
+    json_payload = {"query": query, "variables": {}, "operationName": "MyQuery"}
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": HARDCOVER_AUTHORIZATION,
+    }
+
+    response = requests.post(url, json=json_payload, headers=headers)
+    data = response.json()
+
+    if "errors" in data:
+        print("Errors:", data["errors"])
+        return {"error": data["errors"]}
+    else:
+        print("Data:", data["data"])
+        data = data["data"]
+        if data.get("authors", []) and data["authors"][0].get("contributions", []):
+            contributions = data["authors"][0]["contributions"]
+            books = [item["book"] for item in contributions]
+            return {"books": books}
+        else:
+            return {"books": []}
+
+
+def search_movies_by_director(director: str):
+    """Searches TMDB for the top movies made by a director.
+
+    Uses The Movie Database (TMDB) API to find movies directed by a specific person.
+    Returns movies from their "known_for" works that are of media type "movie".
+
+    Args:
+        director: The name of the director to search for.
+
+    Returns:
+        dict: A dictionary containing either:
+            - {"movies": list}: List of movie dictionaries with title, overview, and release_date
+            - {"status_code": int, "error": str}: Error information if the API call fails
+
+    Note:
+        Requires TMDB_API_KEY environment variable to be set.
+        Returns movies from the director's "known_for" works, limited to movie media type.
+    """
+    TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+    if not TMDB_API_KEY:
+        return {"error": "TMDB_API_KEY environment variable not set"}
+
+    url = "https://api.themoviedb.org/3/search/person"
+    params = {"query": director}
+
+    headers = {"accept": "application/json", "Authorization": f"Bearer {TMDB_API_KEY}"}
+
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("results"):
+            director_info = data["results"][0]
+            works = director_info.get("known_for", [])
+            movies = [
+                {
+                    "title": work["title"],
+                    "overview": work["overview"],
+                    "release_date": work["release_date"],
+                }
+                for work in works
+                if work.get("media_type") == "movie"
+            ]
+            return {"movies": movies}
+        else:
+            return {"movies": []}
+    else:
+        return {"status_code": response.status_code, "error": response.text}
+
+
+def search_artworks_by_artist(artist: str):
+    """Searches the Art Institute of Chicago API for artworks made by an artist.
+
+    Uses The Art Institute of Chicago's public API to find artworks created by a specific artist.
+    Returns up to 20 artworks with detailed information including title, artist, date, description, and type.
+
+    Args:
+        artist: The name of the artist to search for.
+
+    Returns:
+        dict: A dictionary containing either:
+            - {"artworks": list}: List of artwork dictionaries with title, artist_title, date_display, description, and artwork_type_title
+            - {"status_code": int, "error": str}: Error information if the API call fails
+
+    Note:
+        This API is free and doesn't require authentication.
+        Returns up to 20 artworks with specified fields for each artwork.
+    """
+    url = "https://api.artic.edu/api/v1/artworks/search"
+    fields = [
+        "title",
+        "artist_title",
+        "date_display",
+        "description",
+        "artwork_type_title",
+    ]
+    params = {
+        "q": artist,
+        "size": 20,
+        "fields": ",".join(
+            fields
+        ),  # api expects fields as comma-separated, not &-separated (default for encoding lists)
+    }
+
+    headers = {
+        "accept": "application/json",
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        data = response.json()
+
+        artworks = data.get("data", [])
+        return {"artworks": artworks}
+    else:
+        return {"status_code": response.status_code, "error": response.text}
+
+
 # List of tools available for Claude to use
 tools = [
     {
@@ -611,57 +840,46 @@ tools = [
             "required": ["url"],
         },
     },
+    {
+        "name": "search_books",
+        "description": "Search for books written by a specific author using the Hardcover.app API",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string",
+                    "description": "Required parameter. The name of the author to search for books by.",
+                },
+            },
+            "required": ["author"],
+        },
+    },
+    {
+        "name": "search_movies_by_director",
+        "description": "Search for movies directed by a specific director using The Movie Database (TMDB) API",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "director": {
+                    "type": "string",
+                    "description": "Required parameter. The name of the director to search for movies by.",
+                },
+            },
+            "required": ["director"],
+        },
+    },
+    {
+        "name": "search_artworks_by_artist",
+        "description": "Search for artworks created by a specific artist using The Art Institute of Chicago API",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "artist": {
+                    "type": "string",
+                    "description": "Required parameter. The name of the artist to search for artworks by.",
+                },
+            },
+            "required": ["artist"],
+        },
+    },
 ]
-
-
-def process_tool_call(tool_name: str, params: dict):
-    print("=" * 50)
-    print(f"Tool call using tool {tool_name}")
-    print(f"Tool call params {params}")
-
-    if tool_name == "brave_search":
-        res = brave_search(**params)
-    elif tool_name == "search_flights":
-        res = search_flights(**params)
-    elif tool_name == "search_weather":
-        res = search_weather(**params)
-    elif tool_name == "get_url":
-        res = get_url(**params)
-    else:
-        res = f"The {tool_name} tool isn't currently defined"
-    print(f"Tool call result: {res}")
-    print("=" * 50)
-    return res
-
-
-def get_pdf_text(pdf_url: str) -> str | Error:
-    response = requests.get(pdf_url)
-    if response.status_code == 200:
-        tempdir = tempfile.TemporaryDirectory()
-        print(f"Temporary directory created at: {tempdir.name}")
-
-        try:
-            temp_pdf_path = os.path.join(tempdir.name, "temp.pdf")
-            with open(temp_pdf_path, "wb") as f:
-                f.write(response.content)
-            print(f"PDF downloaded successfully to {temp_pdf_path}")
-            document = fitz.open(temp_pdf_path)
-            pdf_text = []
-            for page_index, page in enumerate(document):
-                text = page.get_text("text")
-                pdf_text.append(text)
-            res = "\n".join(pdf_text)
-            return res
-        except Exception as e:
-            print(f"Error extracting text from pdf: {e}")
-
-        tempdir.cleanup()
-        print("Temporary directory cleaned up")
-
-    else:
-        print(
-            f"Status code {response.status_code} when getting pdf text. Error message: {response.json()}"
-        )
-        return Error(
-            status_code=response.status_code, content=json.dumps(response.json())
-        )
